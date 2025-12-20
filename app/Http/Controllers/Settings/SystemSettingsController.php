@@ -1,0 +1,549 @@
+<?php
+
+namespace App\Http\Controllers\Settings;
+
+use App\Http\Controllers\Controller;
+use App\Models\Setting;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
+
+
+class SystemSettingsController extends Controller
+{
+    /**
+     * Update the system settings.
+     *
+     * Handles system-wide configuration including:
+     * - Language and localization settings
+     * - Date/time formats and timezone
+     * - Email verification requirements
+     * - Landing page enable/disable toggle
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function update(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'defaultLanguage' => 'required|string',
+                'dateFormat' => 'required|string',
+                'timeFormat' => 'required|string',
+                'calendarStartDay' => 'required|string',
+                'defaultTimezone' => 'required|string',
+                'emailVerification' => 'boolean',
+                'landingPageEnabled' => 'boolean',
+            ]);
+
+            foreach ($validated as $key => $value) {
+                updateSetting($key, $value);
+            }
+
+            return redirect()->back()->with('success', __('System settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update system settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Update the brand settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateBrand(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'settings' => 'required|array',
+                'settings.logoDark' => 'nullable|string',
+                'settings.logoLight' => 'nullable|string',
+                'settings.favicon' => 'nullable|string',
+                'settings.titleText' => 'nullable|string|max:255',
+                'settings.footerText' => 'nullable|string|max:500',
+                'settings.themeColor' => 'nullable|string|in:blue,green,purple,orange,red,custom',
+                'settings.customColor' => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
+                'settings.sidebarVariant' => 'nullable|string|in:inset,floating,minimal',
+                'settings.sidebarStyle' => 'nullable|string|in:plain,colored,gradient',
+                'settings.layoutDirection' => 'nullable|string|in:left,right',
+                'settings.themeMode' => 'nullable|string|in:light,dark,system',
+            ]);
+
+            $userId = auth()->id();
+            foreach ($validated['settings'] as $key => $value) {
+                updateSetting($key, $value, $userId);
+            }
+
+            return redirect()->back()->with('success', __('Brand settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update brand settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Update the recaptcha settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateRecaptcha(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'recaptchaEnabled' => 'boolean',
+                'recaptchaVersion' => 'required|in:v2,v3',
+                'recaptchaSiteKey' => 'required|string',
+                'recaptchaSecretKey' => 'required|string',
+            ]);
+
+            foreach ($validated as $key => $value) {
+                updateSetting($key, $value);
+            }
+
+            return redirect()->back()->with('success', __('ReCaptcha settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update ReCaptcha settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Update the chatgpt settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateChatgpt(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'chatgptKey' => 'required|string',
+                'chatgptModel' => 'required|string',
+            ]);
+
+            foreach ($validated as $key => $value) {
+                updateSetting($key, $value);
+            }
+
+            return redirect()->back()->with('success', __('Chat GPT settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update Chat GPT settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+
+
+    /**
+     * Update the cookie settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateCookie(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'enableLogging' => 'required|boolean',
+                'strictlyNecessaryCookies' => 'required|boolean',
+                'cookieTitle' => 'required|string|max:255',
+                'strictlyCookieTitle' => 'required|string|max:255',
+                'cookieDescription' => 'required|string',
+                'strictlyCookieDescription' => 'required|string',
+                'contactUsDescription' => 'required|string',
+                'contactUsUrl' => 'required|url',
+            ]);
+
+            foreach ($validated as $key => $value) {
+                updateSetting($key, is_bool($value) ? ($value ? '1' : '0') : $value);
+            }
+
+            return redirect()->back()->with('success', __('Cookie settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update cookie settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Update the SEO settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateSeo(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'metaKeywords' => 'required|string|max:255',
+                'metaDescription' => 'required|string|max:160',
+                'metaImage' => 'required|string',
+            ]);
+
+            foreach ($validated as $key => $value) {
+                updateSetting($key, $value);
+            }
+
+            return redirect()->back()->with('success', __('SEO settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update SEO settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Update the Google Calendar settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateGoogleCalendar(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'googleCalendarEnabled' => 'boolean',
+                'googleCalendarId' => 'nullable|string|max:255',
+                'googleCalendarJson' => 'nullable|file|mimes:json|max:2048',
+            ]);
+
+            $settings = [
+                'googleCalendarEnabled' => $validated['googleCalendarEnabled'] ?? false,
+                'googleCalendarId' => $validated['googleCalendarId'] ?? '',
+            ];
+
+            // Handle JSON file upload
+            if ($request->hasFile('googleCalendarJson')) {
+                $file = $request->file('googleCalendarJson');
+                $path = $file->store('google-calendar', 'public');
+                $settings['googleCalendarJsonPath'] = $path;
+            }
+
+            foreach ($settings as $key => $value) {
+                updateSetting($key, is_bool($value) ? ($value ? '1' : '0') : $value);
+            }
+
+            return redirect()->back()->with('success', __('Google Calendar settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update Google Calendar settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+
+
+    /**
+     * Update the storage settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function updateStorage(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'storage_type' => 'required|in:local,aws_s3,wasabi',
+                'allowedFileTypes' => 'required|string',
+                'maxUploadSize' => 'required|numeric|min:1',
+                // AWS S3 fields
+                'awsAccessKeyId' => 'nullable|string',
+                'awsSecretAccessKey' => 'nullable|string',
+                'awsDefaultRegion' => 'nullable|string',
+                'awsBucket' => 'nullable|string',
+                'awsUrl' => 'nullable|string',
+                'awsEndpoint' => 'nullable|string',
+                // Wasabi fields
+                'wasabiAccessKey' => 'nullable|string',
+                'wasabiSecretKey' => 'nullable|string',
+                'wasabiRegion' => 'nullable|string',
+                'wasabiBucket' => 'nullable|string',
+                'wasabiUrl' => 'nullable|string',
+                'wasabiRoot' => 'nullable|string',
+            ]);
+
+            // Map form fields to setting keys
+            $settingsMap = [
+                'storage_type' => 'storage_type',
+                'allowedFileTypes' => 'storage_file_types',
+                'maxUploadSize' => 'storage_max_upload_size',
+                'awsAccessKeyId' => 'aws_access_key_id',
+                'awsSecretAccessKey' => 'aws_secret_access_key',
+                'awsDefaultRegion' => 'aws_default_region',
+                'awsBucket' => 'aws_bucket',
+                'awsUrl' => 'aws_url',
+                'awsEndpoint' => 'aws_endpoint',
+                'wasabiAccessKey' => 'wasabi_access_key',
+                'wasabiSecretKey' => 'wasabi_secret_key',
+                'wasabiRegion' => 'wasabi_region',
+                'wasabiBucket' => 'wasabi_bucket',
+                'wasabiUrl' => 'wasabi_url',
+                'wasabiRoot' => 'wasabi_root',
+            ];
+
+            foreach ($validated as $key => $value) {
+                if (isset($settingsMap[$key]) && $value !== null) {
+                    updateSetting($settingsMap[$key], $value);
+                }
+            }
+
+            return redirect()->back()->with('success', __('Storage settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update storage settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Get storage settings for API.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getStorageSettings()
+    {
+        $settings = \App\Services\StorageConfigService::getStorageConfig();
+
+        return response()->json([
+            'allowed_file_types' => $settings['allowed_file_types'] ?? 'jpg,png,webp,gif',
+            'max_file_size_mb' => $settings['max_file_size_mb'] ?? 2
+        ]);
+    }
+
+    /**
+     * Get email notification settings.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getEmailNotifications()
+    {
+        $userId = createdBy();
+        $templates = \App\Models\EmailTemplate::select('id', 'name')->get();
+        $settings = [];
+
+        foreach ($templates as $template) {
+            $userTemplate = \App\Models\UserEmailTemplate::where('user_id', $userId)
+                ->where('template_id', $template->id)
+                ->first();
+
+            $settings[$template->name] = $userTemplate ? $userTemplate->is_active : false;
+        }
+
+        return response()->json($settings);
+    }
+
+    /**
+     * Get available email notifications.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getAvailableEmailNotifications()
+    {
+        $templates = \App\Models\EmailTemplate::select('id', 'name')->get();
+        $notifications = [];
+
+        foreach ($templates as $template) {
+            $notifications[] = [
+                'name' => $template->name,
+                'label' => str_replace(' ', ' ', $template->name)
+            ];
+        }
+
+        return response()->json($notifications);
+    }
+
+    /**
+     * Update email notification settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateEmailNotifications(Request $request)
+    {
+        try {
+            $userId = createdBy();
+            $availableTemplates = \App\Models\EmailTemplate::pluck('name', 'id')->toArray();
+
+            $rules = [];
+            foreach ($availableTemplates as $templateId => $templateName) {
+                $rules[$templateName] = 'boolean';
+            }
+
+            $validated = $request->validate($rules);
+
+            foreach ($availableTemplates as $templateId => $templateName) {
+                if (isset($validated[$templateName])) {
+                    \App\Models\UserEmailTemplate::updateOrCreate(
+                        ['user_id' => $userId, 'template_id' => $templateId],
+                        ['is_active' => $validated[$templateName]]
+                    );
+                }
+            }
+
+            return redirect()->back()->with('success', __('Email notification settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update email notification settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Get Twilio notification settings.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTwilioNotifications()
+    {
+        $userId = createdBy();
+        $templates = \App\Models\NotificationTemplate::where('type', 'twilio')->select('id', 'name')->get();
+        $settings = [];
+
+        foreach ($templates as $template) {
+            $userTemplate = \App\Models\UserNotificationTemplate::where('user_id', $userId)
+                ->where('template_id', $template->id)
+                ->first();
+
+            $settings[$template->name] = $userTemplate ? $userTemplate->is_active : false;
+        }
+
+        return response()->json($settings);
+    }
+
+    /**
+     * Get available Twilio notifications.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getAvailableTwilioNotifications()
+    {
+        $templates = \App\Models\NotificationTemplate::where('type', 'twilio')->select('id', 'name')->get();
+        $notifications = [];
+
+        foreach ($templates as $template) {
+            $notifications[] = [
+                'name' => $template->name,
+                'label' => str_replace(' ', ' ', $template->name)
+            ];
+        }
+
+        return response()->json($notifications);
+    }
+
+    /**
+     * Get Twilio configuration settings.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTwilioConfig()
+    {
+        return response()->json([
+            'twilio_sid' => getSetting('twilio_sid', ''),
+            'twilio_token' => getSetting('twilio_token', ''),
+            'twilio_from' => getSetting('twilio_from', '')
+        ]);
+    }
+
+    /**
+     * Update Twilio notification settings.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateTwilioNotifications(Request $request)
+    {
+        try {
+            $userId = createdBy();
+            $availableTemplates = \App\Models\NotificationTemplate::where('type', 'twilio')->pluck('name', 'id')->toArray();
+
+            $rules = [
+                'twilio_sid' => 'nullable|string',
+                'twilio_token' => 'nullable|string',
+                'twilio_from' => 'nullable|string'
+            ];
+
+            foreach ($availableTemplates as $templateId => $templateName) {
+                $rules[$templateName] = 'boolean';
+            }
+
+            $validated = $request->validate($rules);
+
+            // Update Twilio configuration
+            updateSetting('twilio_sid', $validated['twilio_sid'] ?? '');
+            updateSetting('twilio_token', $validated['twilio_token'] ?? '');
+            updateSetting('twilio_from', $validated['twilio_from'] ?? '');
+
+            // Update notification settings
+            foreach ($availableTemplates as $templateId => $templateName) {
+                if (isset($validated[$templateName])) {
+                    \App\Models\UserNotificationTemplate::updateOrCreate(
+                        ['user_id' => $userId, 'template_id' => $templateId],
+                        ['is_active' => $validated[$templateName]]
+                    );
+                }
+            }
+
+            return redirect()->back()->with('success', __('Twilio settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update Twilio settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Send test SMS.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function sendTestSMS(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'phone' => 'required|string'
+            ]);
+
+            $twilio = $this->getTwilioConfig()->getData(true);
+            $sid = $twilio['twilio_sid'];
+            $token = $twilio['twilio_token'];
+            $from = $twilio['twilio_from'];
+
+            if (!$sid || !$token || !$from) {
+                return redirect()->back()->with('error', __('Twilio credentials are not configured. Please configure Twilio settings first.'));
+            }
+
+            $twilio = new \Twilio\Rest\Client($sid, $token);
+            $message = __('This is a test SMS from :app_name. Your Twilio configuration is working correctly!', ['app_name' => config('app.name')]);
+            $twilio->messages->create($validated['phone'], [
+                'from' => $from,
+                'body' => $message
+            ]);
+
+            return redirect()->back()->with('success', __('Test SMS sent successfully to :phone', ['phone' => $validated['phone']]));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to send test SMS: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Clear application cache.
+     *
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function clearCache()
+    {
+        try {
+            \Artisan::call('cache:clear');
+            \Artisan::call('route:clear');
+            \Artisan::call('view:clear');
+            \Artisan::call('optimize:clear');
+
+            return redirect()->back()->with('success', __('Cache cleared successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to clear cache: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Update invoice template setting
+     */
+    public function updateInvoiceTemplate(\Illuminate\Http\Request $request)
+    {
+        $request->validate([
+            'template_id' => 'required|integer|min:1|max:9'
+        ]);
+
+        updateSetting('invoiceTemplate', $request->template_id);
+
+        return back()->with('success', __('Invoice template updated successfully!'));
+    }
+}
