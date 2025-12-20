@@ -1,0 +1,146 @@
+name: Deploy Laravel - ModernizeTech
+
+on:
+  workflow_dispatch:
+    inputs:
+      subdomain:
+        description: 'Subdomain for deployment'
+        required: true
+      db_host:
+        description: 'Database host'
+        required: true
+        default: 'localhost'
+      db_database:
+        description: 'Database name'
+        required: true
+      db_username:
+        description: 'Database username'
+        required: true
+      db_password:
+        description: 'Database password'
+        required: true
+      repository_url:
+        description: 'Repository SSH URL'
+        required: true
+        default: 'git@github.com:ModernizeTechOficial/saas_cyzor_erp.git'
+      sql_file_path:
+        description: 'Caminho do SQL dump dentro do repositório'
+        required: false
+        default: 'database/dump.sql'
+      purchase_id:
+        description: 'ID da compra'
+        required: false
+        default: 'não encontrado'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PURCHASE_ID: ${{ github.event.inputs.purchase_id }}
+      SUBDOMAIN: ${{ github.event.inputs.subdomain }}
+      API_URL: https://cyzor.com.br/api/github/deploy-step
+
+    steps:
+      - name: Checkout workflow
+        uses: actions/checkout@v4
+
+      - name: Notificar API sobre deploy (início)
+        run: |
+          curl -X POST "https://cyzor.com.br/api/github/webhook" \
+            -H "Content-Type: application/json" \
+            -d "{\"purchase_id\": \"${{ env.PURCHASE_ID }}\", \"subdomain\": \"${{ env.SUBDOMAIN }}\"}"
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY_RSA }}" > ~/.ssh/cyzor_erp
+          chmod 600 ~/.ssh/cyzor_erp
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+      - name: Deploy Real → TEMPO REAL A CADA ETAPA
+        run: |
+          ssh -i ~/.ssh/cyzor_erp -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            set -e
+            # FUNÇÃO PARA NOTIFICAR O PAINEL
+            notify() {
+              # adiciona "percent" para cada etapa
+              PERCENT=$3
+              curl -X POST "${{ env.API_URL }}" \
+                -H "Content-Type: application/json" \
+                -d "{
+                  \"purchase_id\": \"${{ env.PURCHASE_ID }}\",
+                  \"subdomain\": \"${{ env.SUBDOMAIN }}\",
+                  \"step\": \"$1\",
+                  \"status\": \"$2\",
+                  \"percent\": ${PERCENT:-null}
+                }" || true
+            }
+            notify "Iniciando deploy" "in_progress" 5
+            TARGET_DIR="/home/${{ github.event.inputs.subdomain }}/public_html"
+            mkdir -p "$TARGET_DIR"
+            cd "$TARGET_DIR"
+            # Backup
+            notify "Fazendo backup" "in_progress" 10
+            if [ -n "$(ls -A . 2>/dev/null)" ]; then
+              tar -czf "../backup_$(date +%F_%H-%M-%S).tar.gz" ./* || true
+              rm -rf ./*
+            fi
+            notify "Backup concluído" "completed" 15
+            # Clonar repositório
+            notify "Clonando repositório" "in_progress" 20
+            export GIT_SSH_COMMAND="ssh -i ~/.ssh/cyzor_erp -o StrictHostKeyChecking=no"
+            git clone "${{ github.event.inputs.repository_url }}" . || true
+            notify "Repositório clonado" "completed" 25
+            # Configurar .env
+            notify "Configurando .env" "in_progress" 30
+            cp .env.example .env
+            sed -i "s|APP_URL=.*|APP_URL=https://${{ github.event.inputs.subdomain }}|" .env
+            sed -i "s|DB_HOST=.*|DB_HOST=${{ github.event.inputs.db_host }}|" .env
+            sed -i "s|DB_DATABASE=.*|DB_DATABASE=${{ github.event.inputs.db_database }}|" .env
+            sed -i "s|DB_USERNAME=.*|DB_USERNAME=${{ github.event.inputs.db_username }}|" .env
+            sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${{ github.event.inputs.db_password }}|" .env
+            notify ".env configurado" "completed" 35
+            # Virtual Host
+            notify "Aplicando Virtual Host" "in_progress" 40
+            TEMPLATE_PATH="$TARGET_DIR/.github/templates/vhconf.template"
+            if [ -f "$TEMPLATE_PATH" ]; then
+              sudo mkdir -p "/usr/local/lsws/conf/vhosts/${{ github.event.inputs.subdomain }}" || true
+              sudo cp "$TEMPLATE_PATH" "/usr/local/lsws/conf/vhosts/${{ github.event.inputs.subdomain }}/vhconf.conf"
+              sudo sed -i "s|{{DOMAIN}}|${{ github.event.inputs.subdomain }}|g" "/usr/local/lsws/conf/vhosts/${{ github.event.inputs.subdomain }}/vhconf.conf"
+              sudo sed -i "s|{{PUBLIC_DIR}}|$TARGET_DIR/public|g" "/usr/local/lsws/conf/vhosts/${{ github.event.inputs.subdomain }}/vhconf.conf"
+              sudo /usr/local/lsws/bin/lswsctrl reload || true
+            fi
+            notify "Virtual Host aplicado" "completed" 45
+            # Permissões
+            notify "Ajustando permissões" "in_progress" 50
+            USUARIO=$(stat -c '%U' ..)
+            sudo chown -R "$USUARIO:$USUARIO" . || true
+            sudo find . -type d -exec chmod 755 {} \; || true
+            sudo find . -type f -exec chmod 644 {} \; || true
+            sudo chmod -R 775 storage bootstrap/cache || true
+            notify "Permissões OK" "completed" 55
+            # Dependências
+            notify "Instalando dependências" "in_progress" 60
+            composer install --no-interaction --optimize-autoloader || true
+            [ -f package.json ] && npm ci || true
+            notify "Dependências instaladas" "completed" 70
+            # Laravel
+            notify "Executando comandos Laravel" "in_progress" 75
+            php artisan key:generate --force || true
+            php artisan storage:link || true
+            notify "Laravel configurado" "completed" 80
+            # Banco de dados
+            notify "Importando banco de dados" "in_progress" 85
+            SQL_FILE="$TARGET_DIR/${{ github.event.inputs.sql_file_path }}"
+            if [ -f "$SQL_FILE" ]; then
+              mysql -h "${{ github.event.inputs.db_host }}" \
+                -u "${{ github.event.inputs.db_username }}" \
+                -p"${{ github.event.inputs.db_password }}" \
+                "${{ github.event.inputs.db_database }}" < "$SQL_FILE" || true
+              notify "Banco importado" "completed" 90
+            else
+              notify "Sem dump SQL" "skipped" 90
+            fi
+            rm -rf "$TARGET_DIR/cache/*" || true
+            sudo /usr/local/lsws/bin/lswsctrl reload || true
+            notify "Deploy concluído com sucesso!" "completed" 100
+          EOF

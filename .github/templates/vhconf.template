@@ -1,0 +1,23 @@
+vhConf {
+  docRoot {{PUBLIC_DIR}}
+  index {
+    useServer 0
+    indexFiles index.php, index.html
+  }
+  errorlog /usr/local/lsws/logs/{{DOMAIN}}-error.log {
+    logLevel ERROR
+  }
+  accesslog /usr/local/lsws/logs/{{DOMAIN}}-access.log {
+    rollingSize 10M
+  }
+  expires {
+    enableExpires 1
+  }
+  rewrite {
+    enable 1
+    autoLoadHtaccess 0
+    rules {
+      rewrite ^/(.*)$ /index.php?$1 last;
+    }
+  }
+}
