@@ -42,7 +42,7 @@ on:
       ssh_key_name:
         description: 'Nome do arquivo da chave privada SSH'
         required: false
-        default: 'id_rsa'
+        default: 'vendas_crm'
 
 jobs:
   deploy:
