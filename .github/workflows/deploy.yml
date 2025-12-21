@@ -22,7 +22,7 @@ on:
       repository_url:
         description: 'Repository SSH URL'
         required: true
-        default: 'git@github.com:ModernizeTechOficial/cyzor_deploy_vendas.git'
+        default: 'git@github.com:ModernizeTechOficial/vendas_crm2.git'
       sql_file_path:
         description: 'Caminho do SQL dump dentro do repositório'
         required: false
@@ -52,13 +52,13 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY_RSA }}" > ~/.ssh/cyzor_deploy_vendas
-          chmod 600 ~/.ssh/cyzor_deploy_vendas
+          echo "${{ secrets.SERVER_SSH_KEY_RSA }}" > ~/.ssh/vendas_crm2
+          chmod 600 ~/.ssh/vendas_crm2
           ssh-keyscan -H github.com >> ~/.ssh/known_hosts
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
       - name: Deploy Real → TEMPO REAL A CADA ETAPA
         run: |
-          ssh -i ~/.ssh/cyzor_deploy_vendas -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          ssh -i ~/.ssh/vendas_crm2 -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
             set -e
             # FUNÇÃO PARA NOTIFICAR O PAINEL
             notify() {
@@ -87,7 +87,7 @@ jobs:
             notify "Backup concluído" "completed" 15
             # Clonar repositório
             notify "Clonando repositório" "in_progress" 20
-            export GIT_SSH_COMMAND="ssh -i ~/.ssh/cyzor_deploy_vendas -o StrictHostKeyChecking=no"
+            export GIT_SSH_COMMAND="ssh -i ~/.ssh/vendas_crm2 -o StrictHostKeyChecking=no"
             git clone "${{ github.event.inputs.repository_url }}" . || true
             notify "Repositório clonado" "completed" 25
             # Configurar .env
